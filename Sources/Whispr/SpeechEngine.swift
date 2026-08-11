@@ -21,14 +21,40 @@ final class SpeechAnalyzerEngine: SpeechEngine {
         return Locale.current
     }
 
-    func prepare() async throws {
-        let locale = self.locale
+    /// Resolves the desired locale to the closest SpeechTranscriber-supported
+    /// one. System locales often carry extensions (e.g. `en_US@rg=bdzzzz`,
+    /// a region-format override) that fail exact matching against `en-US`.
+    static func resolve(_ desired: Locale, against supported: [Locale]) -> Locale? {
+        let wantLang = desired.language.languageCode?.identifier ?? desired.identifier
+        let wantRegion = desired.language.region?.identifier ?? desired.region?.identifier
+
+        if let exact = supported.first(where: { $0.identifier(.bcp47) == desired.identifier(.bcp47) }) {
+            return exact
+        }
+        if let langAndRegion = supported.first(where: {
+            $0.language.languageCode?.identifier == wantLang && $0.region?.identifier == wantRegion
+        }) {
+            return langAndRegion
+        }
+        if let langOnly = supported.first(where: { $0.language.languageCode?.identifier == wantLang }) {
+            return langOnly
+        }
+        return nil
+    }
+
+    private func resolvedLocale() async throws -> Locale {
+        let desired = self.locale
         let supported = await SpeechTranscriber.supportedLocales
-        guard supported.contains(where: { $0.identifier(.bcp47) == locale.identifier(.bcp47) }) else {
+        guard let match = Self.resolve(desired, against: supported) else {
             throw NSError(domain: "whispr.asr", code: 2, userInfo: [
-                NSLocalizedDescriptionKey: "Locale \(locale.identifier) not supported by SpeechTranscriber",
+                NSLocalizedDescriptionKey: "Locale \(desired.identifier) not supported by SpeechTranscriber",
             ])
         }
+        return match
+    }
+
+    func prepare() async throws {
+        let locale = try await resolvedLocale()
         let transcriber = SpeechTranscriber(locale: locale, preset: .transcription)
         if let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
             try await request.downloadAndInstall()
@@ -38,6 +64,7 @@ final class SpeechAnalyzerEngine: SpeechEngine {
 
     func transcribe(_ audio: [AVAudioPCMBuffer]) async throws -> String {
         guard !audio.isEmpty else { return "" }
+        let locale = try await resolvedLocale()
         if preparedLocale?.identifier != locale.identifier {
             try await prepare()
         }
