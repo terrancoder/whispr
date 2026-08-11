@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>whispr</string>
+    <key>CFBundleDisplayName</key>
+    <string>whispr</string>
+    <key>CFBundleIdentifier</key>
+    <string>dev.local.whispr</string>
+    <key>CFBundleExecutable</key>
+    <string>whispr</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>0.1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>26.0</string>
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>whispr records your voice while you hold the dictation hotkey so it can transcribe it on-device.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>whispr transcribes your dictation entirely on-device.</string>
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
+</dict>
+</plist>
