@@ -27,6 +27,7 @@ final class StatusItemController: NSObject {
         switch state {
         case .idle: symbol = "mic"
         case .recording: symbol = "mic.fill"
+        case .handsFree: symbol = "mic.badge.plus"
         case .processing: symbol = "waveform"
         case .error: symbol = "mic.slash"
         }
@@ -58,9 +59,17 @@ final class StatusItemController: NSObject {
 
         menu.addItem(.separator())
 
-        let hint = NSMenuItem(title: "Hold fn to dictate · Esc cancels", action: nil, keyEquivalent: "")
+        let hint = NSMenuItem(title: "Hold fn to dictate · double-tap fn or fn+Space for hands-free", action: nil, keyEquivalent: "")
         hint.isEnabled = false
         menu.addItem(hint)
+
+        let engineItem = NSMenuItem(title: "Engine: …", action: nil, keyEquivalent: "")
+        engineItem.isEnabled = false
+        menu.addItem(engineItem)
+        controller.$engineName
+            .receive(on: DispatchQueue.main)
+            .sink { name in engineItem.title = "Engine: \(name)" }
+            .store(in: &cancellables)
 
         menu.addItem(.separator())
         let quit = NSMenuItem(title: "Quit whispr", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")

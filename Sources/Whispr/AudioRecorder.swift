@@ -5,6 +5,9 @@ import AVFoundation
 /// (PLAN.md §4.2 — you cannot ask the input node for 16 kHz directly).
 final class AudioRecorder {
     var onLevel: ((Float) -> Void)?
+    /// Called with each converted 16 kHz mono chunk (audio-thread callback) —
+    /// used by hands-free VAD endpointing.
+    var onChunk: ((AVAudioPCMBuffer) -> Void)?
 
     /// Target format for ASR. 16 kHz mono Float32 suits every engine we plan
     /// to use; SpeechAnalyzer converts internally if it prefers another rate.
@@ -20,6 +23,16 @@ final class AudioRecorder {
     private var buffers: [AVAudioPCMBuffer] = []
     private let bufferLock = NSLock()
     private var running = false
+    private var recoveryFile: AVAudioFile?
+
+    /// Crash-recovery WAV: converted audio is flushed here during recording so
+    /// a crash mid-dictation loses nothing (PLAN.md §4.2). Deleted on clean stop.
+    static var recoveryURL: URL {
+        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("whispr", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("recovery.wav")
+    }
 
     func start() throws {
         guard !running else { return }
@@ -35,6 +48,12 @@ final class AudioRecorder {
             ])
         }
         converter = AVAudioConverter(from: hwFormat, to: targetFormat)
+        recoveryFile = try? AVAudioFile(
+            forWriting: Self.recoveryURL,
+            settings: targetFormat.settings,
+            commonFormat: .pcmFormatFloat32,
+            interleaved: false
+        )
 
         input.installTap(onBus: 0, bufferSize: 4096, format: hwFormat) { [weak self] buffer, _ in
             self?.ingest(buffer)
@@ -54,7 +73,27 @@ final class AudioRecorder {
         let result = buffers
         buffers.removeAll()
         bufferLock.unlock()
+        recoveryFile = nil
+        try? FileManager.default.removeItem(at: Self.recoveryURL)
         return result
+    }
+
+    /// Hands-free: pulls the buffered utterance so far *without* stopping
+    /// capture — the session keeps listening while this chunk is transcribed.
+    func drain() -> [AVAudioPCMBuffer] {
+        bufferLock.lock()
+        let result = buffers
+        buffers.removeAll()
+        bufferLock.unlock()
+        return result
+    }
+
+    /// Seconds of (converted) audio captured in the current utterance.
+    var capturedDuration: TimeInterval {
+        bufferLock.lock()
+        let frames = buffers.reduce(0) { $0 + Int($1.frameLength) }
+        bufferLock.unlock()
+        return Double(frames) / targetFormat.sampleRate
     }
 
     private func ingest(_ buffer: AVAudioPCMBuffer) {
@@ -80,6 +119,8 @@ final class AudioRecorder {
         bufferLock.lock()
         buffers.append(out)
         bufferLock.unlock()
+        try? recoveryFile?.write(from: out)
+        onChunk?(out)
     }
 
     private func reportLevel(of buffer: AVAudioPCMBuffer) {

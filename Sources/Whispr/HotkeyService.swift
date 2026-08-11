@@ -12,6 +12,10 @@ final class HotkeyService {
     var onFnUp: (() -> Void)?
     /// Return true to consume the Esc key event.
     var onEscape: (() -> Bool)?
+    /// fn+Space — hands-free toggle. Return true to consume the Space event.
+    var onFnSpace: (() -> Bool)?
+    /// ⌘⌃V — paste last transcript. Return true to consume.
+    var onPasteLast: (() -> Bool)?
 
     private var tap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -22,6 +26,8 @@ final class HotkeyService {
 
     private static let fnKeyCode: Int64 = 63
     private static let escKeyCode: Int64 = 53
+    private static let spaceKeyCode: Int64 = 49
+    private static let vKeyCode: Int64 = 9
 
     func startMonitoring() {
         guard tap == nil else { return }
@@ -111,6 +117,18 @@ final class HotkeyService {
             if keyCode == Self.escKeyCode, let onEscape {
                 var consumed = false
                 DispatchQueue.main.sync { consumed = onEscape() }
+                if consumed { return nil }
+            }
+            if keyCode == Self.spaceKeyCode, event.flags.contains(.maskSecondaryFn), let onFnSpace {
+                var consumed = false
+                DispatchQueue.main.sync { consumed = onFnSpace() }
+                if consumed { return nil }
+            }
+            if keyCode == Self.vKeyCode,
+               event.flags.contains(.maskCommand), event.flags.contains(.maskControl),
+               !event.flags.contains(.maskAlternate), let onPasteLast {
+                var consumed = false
+                DispatchQueue.main.sync { consumed = onPasteLast() }
                 if consumed { return nil }
             }
             return Unmanaged.passUnretained(event)

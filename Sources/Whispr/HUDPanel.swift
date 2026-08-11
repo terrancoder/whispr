@@ -1,12 +1,13 @@
 import AppKit
 import SwiftUI
 
-/// The "Flow Bar": a non-activating floating pill at the bottom-center of the
-/// screen. Never steals focus from the app being dictated into (PLAN.md §4.9).
+/// The "Flow Bar": a non-activating floating pill, always visible, bottom-center
+/// by default. Click = hands-free toggle; drag to move (position persists).
+/// Never steals focus from the app being dictated into (PLAN.md §4.9).
 @MainActor
 final class HUDPanelController {
     private let panel: NSPanel
-    private var hideTask: Task<Void, Never>?
+    private static let frameKey = "whispr.hudFrame"
 
     init(controller: AppController) {
         let size = NSSize(width: 200, height: 44)
@@ -24,41 +25,54 @@ final class HUDPanelController {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = true
-        panel.ignoresMouseEvents = true
+        panel.isMovableByWindowBackground = true
 
         let host = NSHostingView(rootView: FlowBarView(controller: controller))
         host.frame = NSRect(origin: .zero, size: size)
         panel.contentView = host
 
-        position()
+        restorePosition()
+
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.didMoveNotification, object: panel, queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor in self.savePosition() }
+        }
     }
 
-    private func position() {
+    private func restorePosition() {
+        if let saved = UserDefaults.standard.string(forKey: Self.frameKey) {
+            let frame = NSRectFromString(saved)
+            // Only restore if still on a visible screen.
+            if NSScreen.screens.contains(where: { $0.visibleFrame.intersects(frame) }) {
+                panel.setFrameOrigin(frame.origin)
+                return
+            }
+        }
+        defaultPosition()
+    }
+
+    private func defaultPosition() {
         guard let screen = NSScreen.main else { return }
         let frame = screen.visibleFrame
         let size = panel.frame.size
-        let origin = NSPoint(
-            x: frame.midX - size.width / 2,
-            y: frame.minY + 24
-        )
-        panel.setFrameOrigin(origin)
+        panel.setFrameOrigin(NSPoint(x: frame.midX - size.width / 2, y: frame.minY + 24))
+    }
+
+    private func savePosition() {
+        UserDefaults.standard.set(NSStringFromRect(panel.frame), forKey: Self.frameKey)
     }
 
     func show() {
-        hideTask?.cancel()
-        hideTask = nil
-        position()
         panel.orderFrontRegardless()
     }
 
-    func hideSoon(after seconds: Double = 0.6) {
-        hideTask?.cancel()
-        hideTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(seconds))
-            guard !Task.isCancelled else { return }
-            self?.panel.orderOut(nil)
-        }
+    func hide() {
+        panel.orderOut(nil)
     }
+
+    var isVisible: Bool { panel.isVisible }
 }
 
 struct FlowBarView: View {
@@ -73,6 +87,8 @@ struct FlowBarView: View {
         }
         .frame(width: 200, height: 40)
         .padding(2)
+        .contentShape(Capsule())
+        .onTapGesture { controller.hudTapped() }
     }
 
     @ViewBuilder
@@ -83,7 +99,14 @@ struct FlowBarView: View {
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.white.opacity(0.6))
         case .recording:
-            LevelBarsView(level: controller.micLevel)
+            LevelBarsView(level: controller.micLevel, tint: .white)
+        case .handsFree:
+            HStack(spacing: 8) {
+                Image(systemName: "infinity")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.cyan)
+                LevelBarsView(level: controller.micLevel, tint: .cyan)
+            }
         case .processing:
             HStack(spacing: 8) {
                 ProgressView()
@@ -103,16 +126,17 @@ struct FlowBarView: View {
     }
 }
 
-/// Wispr-style animated white bars driven by mic level.
+/// Wispr-style animated bars driven by mic level.
 struct LevelBarsView: View {
     var level: Float
+    var tint: Color = .white
     private let barCount = 24
 
     var body: some View {
         HStack(spacing: 3) {
             ForEach(0..<barCount, id: \.self) { i in
                 Capsule()
-                    .fill(.white)
+                    .fill(tint)
                     .frame(width: 3, height: height(for: i))
             }
         }
@@ -120,7 +144,6 @@ struct LevelBarsView: View {
     }
 
     private func height(for index: Int) -> CGFloat {
-        // Center-weighted bars with per-bar variation so the pill looks alive.
         let center = Double(barCount - 1) / 2
         let distance = abs(Double(index) - center) / center
         let envelope = 1.0 - 0.7 * distance
