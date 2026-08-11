@@ -48,6 +48,16 @@ final class StatusItemController: NSObject {
 
         menu.addItem(.separator())
 
+        let historyItem = NSMenuItem(title: "History…", action: #selector(openHistory(_:)), keyEquivalent: "")
+        historyItem.target = self
+        menu.addItem(historyItem)
+
+        let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings(_:)), keyEquivalent: ",")
+        settingsItem.target = self
+        menu.addItem(settingsItem)
+
+        menu.addItem(.separator())
+
         let soundsItem = NSMenuItem(title: "Sounds", action: #selector(toggleSounds(_:)), keyEquivalent: "")
         soundsItem.target = self
         soundsItem.state = Sounds.enabled ? .on : .off
@@ -90,6 +100,14 @@ final class StatusItemController: NSObject {
     @objc private func toggleSounds(_ sender: NSMenuItem) {
         Sounds.enabled.toggle()
         sender.state = Sounds.enabled ? .on : .off
+    }
+
+    @objc private func openHistory(_ sender: NSMenuItem) {
+        WindowManager.shared.showHistory()
+    }
+
+    @objc private func openSettings(_ sender: NSMenuItem) {
+        WindowManager.shared.showSettings(controller: controller)
     }
 
     @objc private func openAccessibility(_ sender: NSMenuItem) {

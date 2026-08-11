@@ -23,8 +23,8 @@ final class HotkeyService {
     private var tapRunLoop: CFRunLoop?
     private var fnIsDown = false
     private var watchdog: Timer?
+    private var triggerKey = PttKey.current
 
-    private static let fnKeyCode: Int64 = 63
     private static let escKeyCode: Int64 = 53
     private static let spaceKeyCode: Int64 = 49
     private static let vKeyCode: Int64 = 9
@@ -44,6 +44,12 @@ final class HotkeyService {
                 CGEvent.tapEnable(tap: tap, enable: true)
             }
         }
+    }
+
+    /// Re-reads the configured push-to-talk key (Settings change).
+    func reload() {
+        triggerKey = PttKey.current
+        fnIsDown = false
     }
 
     func stopMonitoring() {
@@ -102,8 +108,8 @@ final class HotkeyService {
 
         case .flagsChanged:
             let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-            if keyCode == Self.fnKeyCode {
-                let isDown = event.flags.contains(.maskSecondaryFn)
+            if keyCode == triggerKey.keyCode {
+                let isDown = event.flags.contains(triggerKey.flag)
                 if isDown != fnIsDown {
                     fnIsDown = isDown
                     let cb = isDown ? onFnDown : onFnUp

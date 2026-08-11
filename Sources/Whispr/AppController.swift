@@ -39,6 +39,10 @@ final class AppController: ObservableObject {
     private var capTask: Task<Void, Never>?
     private let sessionCap: TimeInterval = 20 * 60
 
+    /// Frontmost app when the dictation started — the paste target, recorded
+    /// into history.
+    private var targetAppName: String?
+
     func start() {
         hud = HUDPanelController(controller: self)
         hud.show()
@@ -85,6 +89,9 @@ final class AppController: ObservableObject {
         Task {
             try? await engine.prepare()
             await vad.prepare()
+        }
+        Task.detached(priority: .background) {
+            HistoryStore.shared.applyRetention()
         }
 
         recoverCrashedDictationIfAny()
@@ -176,6 +183,7 @@ final class AppController: ObservableObject {
             }
             guard self.state == .idle else { return }
             do {
+                self.targetAppName = NSWorkspace.shared.frontmostApplication?.localizedName
                 try self.recorder.start()
                 self.state = .recording
                 self.startCapTimer()
@@ -214,6 +222,7 @@ final class AppController: ObservableObject {
             }
             guard self.state == .idle else { return }
             do {
+                self.targetAppName = NSWorkspace.shared.frontmostApplication?.localizedName
                 try self.recorder.start()
                 self.state = .handsFree
                 self.startCapTimer()
@@ -251,6 +260,12 @@ final class AppController: ObservableObject {
         do {
             let raw = try await engine.transcribe(audio)
             let text = Rules.apply(to: raw)
+            if !raw.isEmpty {
+                HistoryStore.shared.save(
+                    raw: raw, text: text, appName: targetAppName,
+                    audio: audio, engine: engine.activeEngineName
+                )
+            }
             if !text.isEmpty {
                 // Continuation spacing for follow-on hands-free chunks.
                 let payload = (returnTo == nil && !lastTranscript.isEmpty) ? text + " " : text
@@ -273,6 +288,10 @@ final class AppController: ObservableObject {
         vad.endSession()
         _ = recorder.stop()
         state = .idle
+    }
+
+    func reloadHotkeys() {
+        hotkeys.reload()
     }
 
     func pasteLastTranscript() {
