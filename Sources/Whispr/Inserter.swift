@@ -55,6 +55,21 @@ final class Inserter {
         pasteboard.writeObjects(restored)
     }
 
+    /// Synthesize Return after the paste has settled ("press enter" command).
+    func pressReturn(after delay: TimeInterval) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            let source = CGEventSource(stateID: .combinedSessionState)
+            let returnKey: CGKeyCode = 36
+            guard
+                let down = CGEvent(keyboardEventSource: source, virtualKey: returnKey, keyDown: true),
+                let up = CGEvent(keyboardEventSource: source, virtualKey: returnKey, keyDown: false)
+            else { return }
+            down.post(tap: .cghidEventTap)
+            usleep(10_000)
+            up.post(tap: .cghidEventTap)
+        }
+    }
+
     // MARK: - Synthetic ⌘V
 
     private static func postCmdV() {

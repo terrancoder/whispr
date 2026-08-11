@@ -18,6 +18,7 @@ final class AppController: ObservableObject {
     @Published var enabled = true
     @Published var lastTranscript: String = ""
     @Published var engineName: String = "Apple Speech"
+    @Published var llmStatus: String = "Stopped"
 
     private let hotkeys = HotkeyService()
     private let recorder = AudioRecorder()
@@ -93,6 +94,18 @@ final class AppController: ObservableObject {
         Task.detached(priority: .background) {
             HistoryStore.shared.applyRetention()
         }
+        LLMServer.shared.onStatusChange = { [weak self] status in
+            Task { @MainActor in
+                switch status {
+                case .ready: self?.llmStatus = "Ready"
+                case .starting: self?.llmStatus = "Starting…"
+                case .notInstalled: self?.llmStatus = "Not installed (run scripts/setup-llm.sh)"
+                case .failed(let msg): self?.llmStatus = "Failed: \(msg)"
+                case .stopped: self?.llmStatus = "Stopped"
+                }
+            }
+        }
+        LLMServer.shared.start()
 
         recoverCrashedDictationIfAny()
     }
@@ -100,6 +113,7 @@ final class AppController: ObservableObject {
     func shutdown() {
         hotkeys.stopMonitoring()
         vad.endSession()
+        LLMServer.shared.stop()
     }
 
     // MARK: - fn key semantics
@@ -259,11 +273,12 @@ final class AppController: ObservableObject {
     private func transcribeAndPaste(_ audio: [AVAudioPCMBuffer], returnTo: DictationState?) async {
         do {
             let raw = try await engine.transcribe(audio)
-            let text = Rules.apply(to: raw)
+            let outcome = await Formatter.format(raw: raw)
+            let text = outcome.text
             if !raw.isEmpty {
                 HistoryStore.shared.save(
                     raw: raw, text: text, appName: targetAppName,
-                    audio: audio, engine: engine.activeEngineName
+                    audio: audio, engine: engine.activeEngineName + (outcome.usedLLM ? " + AI" : "")
                 )
             }
             if !text.isEmpty {
@@ -271,6 +286,9 @@ final class AppController: ObservableObject {
                 let payload = (returnTo == nil && !lastTranscript.isEmpty) ? text + " " : text
                 lastTranscript = text
                 inserter.paste(payload)
+                if outcome.pressEnter {
+                    inserter.pressReturn(after: 0.55)
+                }
                 Sounds.play(.paste)
             }
             if let returnTo { state = returnTo }

@@ -133,6 +133,17 @@ struct HistoryView: View {
                 }
                 .buttonStyle(.borderless)
                 .help("Copy")
+                if record.rawText != record.text {
+                    Button {
+                        let pb = NSPasteboard.general
+                        pb.clearContents()
+                        pb.setString(record.rawText, forType: .string)
+                    } label: {
+                        Image(systemName: "arrow.uturn.backward")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Copy raw transcript (undo AI edit)")
+                }
                 Button(role: .destructive) {
                     HistoryStore.shared.delete(record)
                 } label: {

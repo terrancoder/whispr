@@ -50,6 +50,7 @@ struct SettingsView: View {
     @State private var soundsOn = Sounds.enabled
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var localeOverride = UserDefaults.standard.string(forKey: "whispr.locale") ?? ""
+    @State private var cleanup = CleanupLevel.current
 
     var body: some View {
         Form {
@@ -76,6 +77,19 @@ struct SettingsView: View {
                         }
                     }
                 LabeledContent("Engine", value: controller.engineName)
+            }
+
+            Section("AI cleanup") {
+                Picker("Cleanup level", selection: $cleanup) {
+                    ForEach(CleanupLevel.allCases) { level in Text(level.label).tag(level) }
+                }
+                .onChange(of: cleanup) { _, newValue in CleanupLevel.current = newValue }
+                LabeledContent("Local AI model", value: controller.llmStatus)
+                if controller.llmStatus.hasPrefix("Not installed") {
+                    Text("Run `scripts/setup-llm.sh` in the repo once (downloads a ~2.3 GB local model), then restart whispr. Dictation works without it — you just get rules-only cleanup.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Section("History") {

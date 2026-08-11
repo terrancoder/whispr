@@ -1,7 +1,14 @@
 import Foundation
 
+struct RulesResult {
+    var text: String
+    /// "press enter" spoken at the end of the dictation → synthesize Return
+    /// after the paste (desktop-Wispr behavior; end-of-dictation only).
+    var pressEnter: Bool = false
+}
+
 /// Deterministic post-processing (PLAN.md §4.4). Always runs; this is the
-/// guaranteed floor under the (future) LLM polish layer.
+/// guaranteed floor under the LLM polish layer.
 enum Rules {
     /// Spoken command → literal replacement. Matched case-insensitively as
     /// standalone phrases. Order matters: longer phrases first.
@@ -27,9 +34,34 @@ enum Rules {
         ("at sign", "@"),
         ("tilde", "~"),
         ("degree sign", "°"),
+        ("degrees celsius", "°C"),
+        ("degrees fahrenheit", "°F"),
+        ("open bracket", "["),
+        ("close bracket", "]"),
+        ("open angle bracket", "<"),
+        ("close angle bracket", ">"),
+        ("trademark sign", "™"),
+        ("copyright sign", "©"),
+        ("ellipsis", "…"),
+        ("dot dot dot", "…"),
     ]
 
     private static let fillers = ["um", "uh", "uhm", "erm", "mm-hmm", "uh-huh"]
+
+    static func process(_ input: String) -> RulesResult {
+        var pressEnter = false
+        var text = input
+
+        // "press enter" at the very end of the dictation (allow trailing punctuation).
+        if let range = text.range(
+            of: "(?i)[,.]?\\s*\\bpress enter\\b[,.!]?\\s*$", options: .regularExpression
+        ) {
+            text.removeSubrange(range)
+            pressEnter = true
+        }
+
+        return RulesResult(text: apply(to: text), pressEnter: pressEnter)
+    }
 
     static func apply(to input: String) -> String {
         var text = input
