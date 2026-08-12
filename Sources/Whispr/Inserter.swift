@@ -55,6 +55,42 @@ final class Inserter {
         pasteboard.writeObjects(restored)
     }
 
+    /// Capture the frontmost app's current selection via synthetic ⌘C with
+    /// clipboard save/restore — the fallback when AX gives no selected text
+    /// (PLAN.md §4.8; Electron/web apps often hide selection from AX).
+    func captureSelection() async -> String? {
+        let pasteboard = NSPasteboard.general
+        let saved = snapshot(of: pasteboard)
+        pasteboard.clearContents()
+        let baseline = pasteboard.changeCount
+        Self.postKey(0x08, flags: .maskCommand) // ⌘C
+
+        var copied: String?
+        for _ in 0..<8 {
+            try? await Task.sleep(for: .milliseconds(60))
+            if pasteboard.changeCount != baseline {
+                copied = pasteboard.string(forType: .string)
+                break
+            }
+        }
+        Self.restore(saved, to: pasteboard)
+        let trimmed = copied?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (trimmed?.isEmpty ?? true) ? nil : copied
+    }
+
+    private static func postKey(_ key: CGKeyCode, flags: CGEventFlags) {
+        let source = CGEventSource(stateID: .combinedSessionState)
+        guard
+            let down = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: true),
+            let up = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: false)
+        else { return }
+        down.flags = flags
+        up.flags = flags
+        down.post(tap: .cghidEventTap)
+        usleep(10_000)
+        up.post(tap: .cghidEventTap)
+    }
+
     /// Synthesize Return after the paste has settled ("press enter" command).
     func pressReturn(after delay: TimeInterval) {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) {

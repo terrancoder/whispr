@@ -87,6 +87,37 @@ enum LLMClient {
         return postFilter(content)
     }
 
+    /// Generic chat call (command mode, transforms). Post-filtered like cleanup.
+    static func chat(
+        messages: [[String: String]], maxTokens: Int, timeout: TimeInterval
+    ) async throws -> String {
+        let body: [String: Any] = [
+            "model": LLMServer.model,
+            "temperature": 0.3,
+            "max_tokens": maxTokens,
+            "messages": messages,
+        ]
+        var request = URLRequest(url: LLMServer.baseURL.appendingPathComponent("v1/chat/completions"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        request.timeoutInterval = timeout
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+            throw NSError(domain: "whispr.llm", code: 1, userInfo: [
+                NSLocalizedDescriptionKey: "LLM server returned an error",
+            ])
+        }
+        let decoded = try JSONDecoder().decode(Response.self, from: data)
+        guard let content = decoded.choices.first?.message.content else {
+            throw NSError(domain: "whispr.llm", code: 2, userInfo: [
+                NSLocalizedDescriptionKey: "Empty LLM response",
+            ])
+        }
+        return postFilter(content)
+    }
+
     /// Strip artifacts small models emit despite instructions: think blocks,
     /// code fences, wrapping quotes, "Output:" labels.
     static func postFilter(_ input: String) -> String {

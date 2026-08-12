@@ -6,6 +6,7 @@ import Combine
 enum DictationState: Equatable {
     case idle
     case recording
+    case command
     case handsFree
     case processing
     case error(String)
@@ -65,8 +66,12 @@ final class AppController: ObservableObject {
             self.toggleHandsFree()
             return true
         }
+        hotkeys.onCommandDown = { [weak self] in self?.beginCommand() }
+        hotkeys.onCommandUp = { [weak self] in self?.endCommand() }
         hotkeys.onEscape = { [weak self] in
-            guard let self, self.state == .recording || self.state == .handsFree else { return false }
+            guard let self,
+                  self.state == .recording || self.state == .handsFree || self.state == .command
+            else { return false }
             self.cancelDictation()
             return true
         }
@@ -139,7 +144,7 @@ final class AppController: ObservableObject {
             startRecording()
         case .recording:
             break // fn repeat while already held — ignore
-        case .processing, .error:
+        case .command, .processing, .error:
             break
         }
     }
@@ -222,6 +227,118 @@ final class AppController: ObservableObject {
         state = .processing
         Sounds.play(.stop)
         Task { await self.transcribeAndPaste(audio, returnTo: .idle) }
+    }
+
+    // MARK: - Command mode (PLAN.md §4.8)
+
+    private var commandSelection: String?
+
+    private func beginCommand() {
+        guard enabled, state == .idle else { return }
+        guard LLMServer.shared.status == .ready else {
+            flashError("Command mode needs the local AI (see Settings)")
+            return
+        }
+        Task {
+            guard await Permissions.ensureMicrophone() else {
+                self.flashError("Microphone permission needed")
+                return
+            }
+            guard self.state == .idle else { return }
+            self.context = ContextService.capture()
+            self.targetAppName = self.context.appName
+            if self.context.isSecureField {
+                self.flashError("Secure field — command mode blocked")
+                return
+            }
+            // Selection: AX first, synthetic ⌘C fallback.
+            var selection = self.context.selectedText
+            if selection?.isEmpty ?? true {
+                selection = await self.inserter.captureSelection()
+            }
+            if let words = selection?.split(separator: " ").count, words > CommandEngine.maxSelectionWords {
+                self.flashError("Selection too long (max \(CommandEngine.maxSelectionWords) words)")
+                return
+            }
+            self.commandSelection = selection
+            do {
+                try self.recorder.start()
+                self.state = .command
+                self.startCapTimer()
+                Sounds.play(.start)
+            } catch {
+                self.flashError("Mic error: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func endCommand() {
+        guard state == .command else { return }
+        capTask?.cancel()
+        let audio = recorder.stop()
+        state = .processing
+        Sounds.play(.stop)
+        Task {
+            do {
+                let instruction = try await engine.transcribe(audio)
+                guard !instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    self.state = .idle
+                    return
+                }
+                let result = try await CommandEngine.run(
+                    instruction: instruction, selection: self.commandSelection)
+                guard !result.isEmpty else {
+                    self.flashError("Command produced no output")
+                    return
+                }
+                HistoryStore.shared.save(
+                    raw: instruction, text: result, appName: self.targetAppName,
+                    audio: audio, engine: "command"
+                )
+                self.lastTranscript = result
+                self.inserter.paste(result) // replaces the selection in place
+                Sounds.play(.paste)
+                self.state = .idle
+            } catch {
+                self.flashError("Command failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// Transforms: preset instructions applied to the current selection
+    /// without speaking (menu-driven).
+    func applyTransform(_ instruction: String) {
+        guard state == .idle else { return }
+        guard LLMServer.shared.status == .ready else {
+            flashError("Transforms need the local AI (see Settings)")
+            return
+        }
+        Task {
+            self.context = ContextService.capture()
+            self.targetAppName = self.context.appName
+            var selection = self.context.selectedText
+            if selection?.isEmpty ?? true {
+                selection = await self.inserter.captureSelection()
+            }
+            guard let selection, !selection.isEmpty else {
+                self.flashError("Select some text first")
+                return
+            }
+            self.state = .processing
+            do {
+                let result = try await CommandEngine.run(instruction: instruction, selection: selection)
+                guard !result.isEmpty else {
+                    self.flashError("Transform produced no output")
+                    return
+                }
+                self.lastTranscript = result
+                self.inserter.paste(result)
+                Sounds.play(.paste)
+                self.state = .idle
+            } catch {
+                self.flashError("Transform failed: \(error.localizedDescription)")
+            }
+        }
     }
 
     // MARK: - Hands-free flow

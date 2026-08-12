@@ -41,6 +41,19 @@ enum PttKey: String, CaseIterable, Identifiable {
         get { PttKey(rawValue: UserDefaults.standard.string(forKey: "whispr.pttKey") ?? "") ?? .fn }
         set { UserDefaults.standard.set(newValue.rawValue, forKey: "whispr.pttKey") }
     }
+
+    /// Command-mode trigger (hold, speak an instruction over selected text).
+    /// nil = disabled. Default: Right ⌘.
+    static var commandCurrent: PttKey? {
+        get {
+            switch UserDefaults.standard.string(forKey: "whispr.cmdKey") {
+            case nil: return .rightCommand
+            case "off": return nil
+            case let raw?: return PttKey(rawValue: raw) ?? .rightCommand
+            }
+        }
+        set { UserDefaults.standard.set(newValue?.rawValue ?? "off", forKey: "whispr.cmdKey") }
+    }
 }
 
 struct SettingsView: View {
@@ -52,6 +65,7 @@ struct SettingsView: View {
     @State private var localeOverride = UserDefaults.standard.string(forKey: "whispr.locale") ?? ""
     @State private var cleanup = CleanupLevel.current
     @State private var autoLearn = AutoLearn.enabled
+    @State private var cmdKeyRaw = PttKey.commandCurrent?.rawValue ?? "off"
 
     var body: some View {
         Form {
@@ -61,6 +75,14 @@ struct SettingsView: View {
                 }
                 .onChange(of: pttKey) { _, newValue in
                     PttKey.current = newValue
+                    controller.reloadHotkeys()
+                }
+                Picker("Command mode key", selection: $cmdKeyRaw) {
+                    Text("Off").tag("off")
+                    ForEach(PttKey.allCases) { key in Text(key.label).tag(key.rawValue) }
+                }
+                .onChange(of: cmdKeyRaw) { _, newValue in
+                    PttKey.commandCurrent = newValue == "off" ? nil : PttKey(rawValue: newValue)
                     controller.reloadHotkeys()
                 }
                 if pttKey == .fn {

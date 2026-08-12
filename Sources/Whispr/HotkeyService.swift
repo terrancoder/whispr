@@ -21,9 +21,14 @@ final class HotkeyService {
     private var runLoopSource: CFRunLoopSource?
     private var thread: Thread?
     private var tapRunLoop: CFRunLoop?
+    var onCommandDown: (() -> Void)?
+    var onCommandUp: (() -> Void)?
+
     private var fnIsDown = false
+    private var cmdKeyIsDown = false
     private var watchdog: Timer?
     private var triggerKey = PttKey.current
+    private var commandKey = PttKey.commandCurrent
 
     private static let escKeyCode: Int64 = 53
     private static let spaceKeyCode: Int64 = 49
@@ -49,7 +54,10 @@ final class HotkeyService {
     /// Re-reads the configured push-to-talk key (Settings change).
     func reload() {
         triggerKey = PttKey.current
+        commandKey = PttKey.commandCurrent
+        if commandKey == triggerKey { commandKey = nil }
         fnIsDown = false
+        cmdKeyIsDown = false
     }
 
     func stopMonitoring() {
@@ -113,6 +121,13 @@ final class HotkeyService {
                 if isDown != fnIsDown {
                     fnIsDown = isDown
                     let cb = isDown ? onFnDown : onFnUp
+                    DispatchQueue.main.async { cb?() }
+                }
+            } else if let commandKey, keyCode == commandKey.keyCode {
+                let isDown = event.flags.contains(commandKey.flag)
+                if isDown != cmdKeyIsDown {
+                    cmdKeyIsDown = isDown
+                    let cb = isDown ? onCommandDown : onCommandUp
                     DispatchQueue.main.async { cb?() }
                 }
             }

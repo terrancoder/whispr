@@ -100,6 +100,13 @@ struct FlowBarView: View {
                 .foregroundStyle(.white.opacity(0.6))
         case .recording:
             LevelBarsView(level: controller.micLevel, tint: .white)
+        case .command:
+            HStack(spacing: 8) {
+                Image(systemName: "wand.and.stars")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.purple)
+                LevelBarsView(level: controller.micLevel, tint: .purple)
+            }
         case .handsFree:
             HStack(spacing: 8) {
                 Image(systemName: "infinity")

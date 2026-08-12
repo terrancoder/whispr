@@ -27,6 +27,7 @@ final class StatusItemController: NSObject {
         switch state {
         case .idle: symbol = "mic"
         case .recording: symbol = "mic.fill"
+        case .command: symbol = "wand.and.stars"
         case .handsFree: symbol = "mic.badge.plus"
         case .processing: symbol = "waveform"
         case .error: symbol = "mic.slash"
@@ -51,6 +52,17 @@ final class StatusItemController: NSObject {
         let historyItem = NSMenuItem(title: "History…", action: #selector(openHistory(_:)), keyEquivalent: "")
         historyItem.target = self
         menu.addItem(historyItem)
+
+        let transformMenu = NSMenu()
+        for (title, instruction) in Self.transforms {
+            let item = NSMenuItem(title: title, action: #selector(runTransform(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = instruction
+            transformMenu.addItem(item)
+        }
+        let transformItem = NSMenuItem(title: "Transform Selection", action: nil, keyEquivalent: "")
+        transformItem.submenu = transformMenu
+        menu.addItem(transformItem)
 
         let dictItem = NSMenuItem(title: "Dictionary…", action: #selector(openDictionary(_:)), keyEquivalent: "")
         dictItem.target = self
@@ -108,6 +120,20 @@ final class StatusItemController: NSObject {
 
     @objc private func openHistory(_ sender: NSMenuItem) {
         WindowManager.shared.showHistory()
+    }
+
+    private static let transforms: [(String, String)] = [
+        ("Polish", "Fix grammar, spelling, and punctuation. Keep the wording and tone."),
+        ("Make Concise", "Make this more concise without losing meaning."),
+        ("Bullet Points", "Turn this into a clear bulleted list."),
+        ("More Professional", "Rewrite this in a professional, polished tone."),
+        ("More Casual", "Rewrite this in a relaxed, casual tone."),
+        ("Prompt Engineer", "Rewrite this as a clear, well-structured prompt for an AI model, preserving all requirements."),
+    ]
+
+    @objc private func runTransform(_ sender: NSMenuItem) {
+        guard let instruction = sender.representedObject as? String else { return }
+        controller.applyTransform(instruction)
     }
 
     @objc private func openDictionary(_ sender: NSMenuItem) {
