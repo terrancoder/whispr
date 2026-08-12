@@ -47,14 +47,22 @@ enum LLMClient {
 
     /// One-shot cleanup call. Throws on timeout/unavailability — callers fall
     /// back to rules-only output.
-    static func cleanup(_ raw: String, brevity: Bool, timeout: TimeInterval = 6) async throws -> String {
+    static func cleanup(
+        _ raw: String, brevity: Bool, context: String? = nil, timeout: TimeInterval = 6
+    ) async throws -> String {
         let estimatedTokens = max(64, raw.split(separator: " ").count * 3)
+        // Static prompt first, dynamic context appended after — keeps the
+        // common token prefix identical across calls for server prompt caching.
+        var system = brevity ? systemPrompt + brevitySuffix : systemPrompt
+        if let context {
+            system += "\n\n" + context
+        }
         let body: [String: Any] = [
             "model": LLMServer.model,
             "temperature": 0.25,
             "max_tokens": min(2048, estimatedTokens),
             "messages": [
-                ["role": "system", "content": brevity ? systemPrompt + brevitySuffix : systemPrompt],
+                ["role": "system", "content": system],
                 ["role": "user", "content": raw],
             ],
         ]

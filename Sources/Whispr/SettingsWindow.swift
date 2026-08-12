@@ -92,6 +92,20 @@ struct SettingsView: View {
                 }
             }
 
+            Section("Styles (tone per app category)") {
+                ForEach(AppCategory.allCases) { category in
+                    Picker(category.label, selection: Binding(
+                        get: { category.style },
+                        set: { category.style = $0 }
+                    )) {
+                        ForEach(Style.allCases) { style in Text(style.label).tag(style) }
+                    }
+                }
+                Text("Styles adjust capitalization, punctuation, and spacing only — never your words. Detected from the frontmost app when you dictate.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("History") {
                 Picker("Retention", selection: $retention) {
                     ForEach(Retention.allCases) { r in Text(r.label).tag(r) }

@@ -43,6 +43,8 @@ final class AppController: ObservableObject {
     /// Frontmost app when the dictation started — the paste target, recorded
     /// into history.
     private var targetAppName: String?
+    /// AX context snapshot taken at dictation start (PLAN.md §4.5).
+    private var context = ContextSnapshot()
 
     func start() {
         hud = HUDPanelController(controller: self)
@@ -197,7 +199,12 @@ final class AppController: ObservableObject {
             }
             guard self.state == .idle else { return }
             do {
-                self.targetAppName = NSWorkspace.shared.frontmostApplication?.localizedName
+                self.context = ContextService.capture()
+                self.targetAppName = self.context.appName
+                if self.context.isSecureField {
+                    self.flashError("Secure field — dictation blocked")
+                    return
+                }
                 try self.recorder.start()
                 self.state = .recording
                 self.startCapTimer()
@@ -236,7 +243,12 @@ final class AppController: ObservableObject {
             }
             guard self.state == .idle else { return }
             do {
-                self.targetAppName = NSWorkspace.shared.frontmostApplication?.localizedName
+                self.context = ContextService.capture()
+                self.targetAppName = self.context.appName
+                if self.context.isSecureField {
+                    self.flashError("Secure field — dictation blocked")
+                    return
+                }
                 try self.recorder.start()
                 self.state = .handsFree
                 self.startCapTimer()
@@ -273,7 +285,7 @@ final class AppController: ObservableObject {
     private func transcribeAndPaste(_ audio: [AVAudioPCMBuffer], returnTo: DictationState?) async {
         do {
             let raw = try await engine.transcribe(audio)
-            let outcome = await Formatter.format(raw: raw)
+            let outcome = await Formatter.format(raw: raw, context: context)
             let text = outcome.text
             if !raw.isEmpty {
                 HistoryStore.shared.save(
