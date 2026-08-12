@@ -302,6 +302,9 @@ final class AppController: ObservableObject {
                     inserter.pressReturn(after: 0.55)
                 }
                 Sounds.play(.paste)
+                if AutoLearn.enabled {
+                    scheduleAutoLearn(pasted: text)
+                }
             }
             if let returnTo { state = returnTo }
         } catch {
@@ -318,6 +321,22 @@ final class AppController: ObservableObject {
         vad.endSession()
         _ = recorder.stop()
         state = .idle
+    }
+
+    /// Experimental dictionary auto-learning: ~12 s after the paste, re-read
+    /// the field via AX and diff against what we pasted (PLAN.md §4.7).
+    private func scheduleAutoLearn(pasted: String) {
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(12))
+            guard let self else { return }
+            let snapshot = ContextService.capture()
+            guard snapshot.appName == self.targetAppName else { return }
+            let fieldNow = (snapshot.textBefore ?? "") + (snapshot.textAfter ?? "")
+            guard !fieldNow.isEmpty else { return }
+            for term in AutoLearn.candidates(pasted: pasted, fieldNow: fieldNow) {
+                DictionaryStore.shared.addTerm(term, autoLearned: true)
+            }
+        }
     }
 
     func reloadHotkeys() {

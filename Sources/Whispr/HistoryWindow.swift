@@ -15,6 +15,12 @@ final class WindowManager {
         }
     }
 
+    func showDictionary() {
+        show(key: "dictionary", title: "whispr — Dictionary", size: NSSize(width: 560, height: 460)) {
+            AnyView(DictionaryView())
+        }
+    }
+
     func showSettings(controller: AppController) {
         show(key: "settings", title: "whispr — Settings", size: NSSize(width: 480, height: 420)) {
             AnyView(SettingsView(controller: controller))

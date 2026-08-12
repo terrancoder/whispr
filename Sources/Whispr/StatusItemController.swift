@@ -52,6 +52,10 @@ final class StatusItemController: NSObject {
         historyItem.target = self
         menu.addItem(historyItem)
 
+        let dictItem = NSMenuItem(title: "Dictionary…", action: #selector(openDictionary(_:)), keyEquivalent: "")
+        dictItem.target = self
+        menu.addItem(dictItem)
+
         let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings(_:)), keyEquivalent: ",")
         settingsItem.target = self
         menu.addItem(settingsItem)
@@ -104,6 +108,10 @@ final class StatusItemController: NSObject {
 
     @objc private func openHistory(_ sender: NSMenuItem) {
         WindowManager.shared.showHistory()
+    }
+
+    @objc private func openDictionary(_ sender: NSMenuItem) {
+        WindowManager.shared.showDictionary()
     }
 
     @objc private func openSettings(_ sender: NSMenuItem) {

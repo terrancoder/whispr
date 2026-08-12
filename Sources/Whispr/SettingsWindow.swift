@@ -51,6 +51,7 @@ struct SettingsView: View {
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var localeOverride = UserDefaults.standard.string(forKey: "whispr.locale") ?? ""
     @State private var cleanup = CleanupLevel.current
+    @State private var autoLearn = AutoLearn.enabled
 
     var body: some View {
         Form {
@@ -85,6 +86,9 @@ struct SettingsView: View {
                 }
                 .onChange(of: cleanup) { _, newValue in CleanupLevel.current = newValue }
                 LabeledContent("Local AI model", value: controller.llmStatus)
+                Toggle("Auto-learn dictionary from my edits (experimental)", isOn: $autoLearn)
+                    .onChange(of: autoLearn) { _, newValue in AutoLearn.enabled = newValue }
+                Button("Open Dictionary…") { WindowManager.shared.showDictionary() }
                 if controller.llmStatus.hasPrefix("Not installed") {
                     Text("Run `scripts/setup-llm.sh` in the repo once (downloads a ~2.3 GB local model), then restart whispr. Dictation works without it — you just get rules-only cleanup.")
                         .font(.caption)

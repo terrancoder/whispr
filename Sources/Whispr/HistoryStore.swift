@@ -46,7 +46,7 @@ final class HistoryStore {
     static let shared = HistoryStore()
     static let changed = Notification.Name("whispr.historyChanged")
 
-    private let dbQueue: DatabaseQueue?
+    let dbQueue: DatabaseQueue?
 
     static var baseDir: URL {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -73,6 +73,26 @@ final class HistoryStore {
                 t.column("duration", .double).notNull().defaults(to: 0)
                 t.column("audioPath", .text)
                 t.column("engine", .text).notNull().defaults(to: "")
+            }
+        }
+        migrator.registerMigration("v2-dictionary") { db in
+            try db.create(table: "dictionaryEntry") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("term", .text).notNull().unique(onConflict: .ignore)
+                t.column("starred", .boolean).notNull().defaults(to: false)
+                t.column("autoLearned", .boolean).notNull().defaults(to: false)
+                t.column("usageCount", .integer).notNull().defaults(to: 0)
+                t.column("createdAt", .datetime).notNull()
+            }
+            try db.create(table: "replacementRule") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("wrong", .text).notNull().unique(onConflict: .replace)
+                t.column("right", .text).notNull()
+            }
+            try db.create(table: "snippet") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("trigger", .text).notNull().unique(onConflict: .replace)
+                t.column("expansion", .text).notNull()
             }
         }
         do {

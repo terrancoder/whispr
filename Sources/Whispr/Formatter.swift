@@ -109,6 +109,12 @@ enum Formatter {
             blocks.append(
                 "The cursor sits mid-sentence. The text before the cursor ends with: \"…\(tail)\". Output a continuation that flows grammatically from it — start lowercase unless it begins with a proper noun, and do not repeat the existing text.")
         }
+        let vocab = DictionaryStore.shared.vocabularyForPrompt()
+        if !vocab.isEmpty {
+            blocks.append(
+                "Custom vocabulary — the spelling authority for names and jargon. When the speech clearly refers to one of these (including phonetically close mishearings), use this exact spelling; never force one where it doesn't belong: "
+                    + vocab.joined(separator: ", "))
+        }
         if !context.screenTerms.isEmpty {
             blocks.append(
                 "Spelling hints — names visible on screen; use these exact spellings when the speech clearly refers to them, never force them otherwise: "
@@ -122,7 +128,10 @@ enum Formatter {
     /// Deterministic floor: style tweaks + mid-sentence splice, applied to
     /// both LLM and rules-only output.
     private static func finalize(_ input: String, style: Style, context: ContextSnapshot) -> String {
-        var text = style.apply(to: input)
+        // Style first (caps/punctuation), then dictionary: replacement rules
+        // fix spellings the LLM may have reintroduced, and snippet expansions
+        // keep their own formatting untouched by style tweaks.
+        var text = DictionaryStore.shared.applyToText(style.apply(to: input))
         if context.isMidSentence, let first = text.first, first.isUppercase {
             // Splice into the sentence: lowercase unless it looks like a
             // proper noun/acronym ("I", "iPhone", "NASA", screen-term match).
