@@ -64,6 +64,15 @@ final class StatusItemController: NSObject {
         transformItem.submenu = transformMenu
         menu.addItem(transformItem)
 
+        let insightsItem = NSMenuItem(title: "Insights…", action: #selector(openInsights(_:)), keyEquivalent: "")
+        insightsItem.target = self
+        menu.addItem(insightsItem)
+
+        let hudItem = NSMenuItem(title: "Hide Flow Bar", action: #selector(toggleHud(_:)), keyEquivalent: "")
+        hudItem.target = self
+        hudItem.state = UserDefaults.standard.bool(forKey: "whispr.hudHidden") ? .on : .off
+        menu.addItem(hudItem)
+
         let dictItem = NSMenuItem(title: "Dictionary…", action: #selector(openDictionary(_:)), keyEquivalent: "")
         dictItem.target = self
         menu.addItem(dictItem)
@@ -134,6 +143,17 @@ final class StatusItemController: NSObject {
     @objc private func runTransform(_ sender: NSMenuItem) {
         guard let instruction = sender.representedObject as? String else { return }
         controller.applyTransform(instruction)
+    }
+
+    @objc private func openInsights(_ sender: NSMenuItem) {
+        WindowManager.shared.showInsights()
+    }
+
+    @objc private func toggleHud(_ sender: NSMenuItem) {
+        let hidden = !UserDefaults.standard.bool(forKey: "whispr.hudHidden")
+        UserDefaults.standard.set(hidden, forKey: "whispr.hudHidden")
+        sender.state = hidden ? .on : .off
+        controller.setHudHidden(hidden)
     }
 
     @objc private func openDictionary(_ sender: NSMenuItem) {

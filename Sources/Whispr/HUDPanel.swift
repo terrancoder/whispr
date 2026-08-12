@@ -95,9 +95,19 @@ struct FlowBarView: View {
     private var content: some View {
         switch controller.state {
         case .idle:
-            Text("whispr")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.white.opacity(0.6))
+            if controller.secureInputActive {
+                HStack(spacing: 6) {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 10))
+                    Text("Secure input active")
+                        .font(.system(size: 11, weight: .medium))
+                }
+                .foregroundStyle(.orange)
+            } else {
+                Text("whispr")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.6))
+            }
         case .recording:
             LevelBarsView(level: controller.micLevel, tint: .white)
         case .command:

@@ -1,5 +1,6 @@
 import AppKit
 import AVFoundation
+import Carbon.HIToolbox
 import Combine
 
 /// Dictation lifecycle state, observed by the HUD and menu bar.
@@ -47,9 +48,26 @@ final class AppController: ObservableObject {
     /// AX context snapshot taken at dictation start (PLAN.md §4.5).
     private var context = ContextSnapshot()
 
+    @Published var secureInputActive = false
+
     func start() {
         hud = HUDPanelController(controller: self)
-        hud.show()
+        if !UserDefaults.standard.bool(forKey: "whispr.hudHidden") {
+            hud.show()
+        }
+
+        // Secure-input watchdog (PLAN.md §4.1): when another process holds
+        // secure keyboard entry, our hotkeys go silent — say so instead of
+        // failing mysteriously.
+        Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                let active = IsSecureEventInputEnabled()
+                if active != self.secureInputActive {
+                    self.secureInputActive = active
+                }
+            }
+        }
 
         recorder.onLevel = { [weak self] level in
             Task { @MainActor in self?.micLevel = level }
@@ -458,6 +476,10 @@ final class AppController: ObservableObject {
 
     func reloadHotkeys() {
         hotkeys.reload()
+    }
+
+    func setHudHidden(_ hidden: Bool) {
+        if hidden { hud.hide() } else { hud.show() }
     }
 
     func pasteLastTranscript() {

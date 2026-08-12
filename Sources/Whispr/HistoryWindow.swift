@@ -15,6 +15,12 @@ final class WindowManager {
         }
     }
 
+    func showInsights() {
+        show(key: "insights", title: "whispr — Insights", size: NSSize(width: 520, height: 420)) {
+            AnyView(InsightsView())
+        }
+    }
+
     func showDictionary() {
         show(key: "dictionary", title: "whispr — Dictionary", size: NSSize(width: 560, height: 460)) {
             AnyView(DictionaryView())

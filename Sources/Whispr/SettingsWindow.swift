@@ -57,6 +57,18 @@ enum PttKey: String, CaseIterable, Identifiable {
 }
 
 struct SettingsView: View {
+    static let languages: [(String, String)] = [
+        ("English", "en-US"), ("English (UK)", "en-GB"), ("Bengali", "bn"),
+        ("Hindi", "hi"), ("Urdu", "ur"), ("Arabic", "ar"),
+        ("Spanish", "es"), ("French", "fr"), ("German", "de"),
+        ("Portuguese", "pt"), ("Italian", "it"), ("Dutch", "nl"),
+        ("Polish", "pl"), ("Russian", "ru"), ("Ukrainian", "uk"),
+        ("Turkish", "tr"), ("Vietnamese", "vi"), ("Japanese", "ja"),
+        ("Korean", "ko"), ("Chinese", "zh"),
+    ]
+    /// Languages outside Parakeet's 25 → routed to WhisperKit.
+    static let whisperOnly: Set<String> = ["bn", "hi", "ur", "ar", "tr", "vi", "ja", "ko", "zh"]
+
     @ObservedObject var controller: AppController
     @State private var retention = Retention.current
     @State private var pttKey = PttKey.current
@@ -90,15 +102,26 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                TextField("Language override (e.g. en-US, empty = system)", text: $localeOverride)
-                    .onSubmit {
-                        let trimmed = localeOverride.trimmingCharacters(in: .whitespaces)
-                        if trimmed.isEmpty {
-                            UserDefaults.standard.removeObject(forKey: "whispr.locale")
-                        } else {
-                            UserDefaults.standard.set(trimmed, forKey: "whispr.locale")
-                        }
+                Picker("Dictation language", selection: $localeOverride) {
+                    Text("System default").tag("")
+                    Text("Auto-detect (Whisper)").tag("auto")
+                    Divider()
+                    ForEach(Self.languages, id: \.1) { name, code in
+                        Text(name).tag(code)
                     }
+                }
+                .onChange(of: localeOverride) { _, newValue in
+                    if newValue.isEmpty {
+                        UserDefaults.standard.removeObject(forKey: "whispr.locale")
+                    } else {
+                        UserDefaults.standard.set(newValue, forKey: "whispr.locale")
+                    }
+                }
+                if localeOverride == "auto" || Self.whisperOnly.contains(localeOverride) {
+                    Text("This language uses the Whisper engine — a ~626 MB model downloads on first use, and transcription is a bit slower than Parakeet.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 LabeledContent("Engine", value: controller.engineName)
             }
 

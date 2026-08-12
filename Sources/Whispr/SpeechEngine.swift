@@ -15,7 +15,8 @@ final class SpeechAnalyzerEngine: SpeechEngine {
     private var preparedLocale: Locale?
 
     var locale: Locale {
-        if let id = UserDefaults.standard.string(forKey: "whispr.locale") {
+        if let id = UserDefaults.standard.string(forKey: "whispr.locale"),
+           !id.isEmpty, id != "auto" {
             return Locale(identifier: id)
         }
         return Locale.current
