@@ -11,17 +11,24 @@ final class WhisperKitEngine {
 
     private(set) var status: Status = .notLoaded
     private var pipe: WhisperKit?
+    private var loadTask: Task<WhisperKit, Error>?
     private let modelName = "large-v3-v20240930_626MB"
 
     func prepare() async throws {
         if pipe != nil { return }
+        // Concurrent callers share one in-flight load instead of each
+        // downloading/loading the ~626 MB model.
+        if let loadTask { _ = try await loadTask.value; return }
         status = .loading
+        let config = WhisperKitConfig(model: modelName)
+        let task = Task { try await WhisperKit(config) }
+        loadTask = task
         do {
-            let config = WhisperKitConfig(model: modelName)
-            pipe = try await WhisperKit(config)
+            pipe = try await task.value
             status = .ready
         } catch {
             status = .failed(error.localizedDescription)
+            loadTask = nil
             throw error
         }
     }

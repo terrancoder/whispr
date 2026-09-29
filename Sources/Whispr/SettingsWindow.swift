@@ -109,6 +109,11 @@ struct SettingsView: View {
                     ForEach(Self.languages, id: \.1) { name, code in
                         Text(name).tag(code)
                     }
+                    // Keep a legacy free-text value (e.g. "en-AU") selectable.
+                    if !localeOverride.isEmpty, localeOverride != "auto",
+                       !Self.languages.contains(where: { $0.1 == localeOverride }) {
+                        Text(localeOverride).tag(localeOverride)
+                    }
                 }
                 .onChange(of: localeOverride) { _, newValue in
                     if newValue.isEmpty {

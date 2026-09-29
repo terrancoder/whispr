@@ -30,30 +30,34 @@ final class ASRRouter: SpeechEngine {
 
         // Auto-detect = Whisper with language identification.
         if setting == .autoDetect {
+            let text = try await whisper.transcribe(audio, language: nil)
             lastUsed = "Whisper (auto)"
-            return try await whisper.transcribe(audio, language: nil)
+            return text
         }
 
         let language = setting.languageCode ?? "en"
 
         if Self.parakeetLanguages.contains(language), parakeet.status == .ready {
             do {
+                let text = try await parakeet.transcribe(audio)
                 lastUsed = "Parakeet"
-                return try await parakeet.transcribe(audio)
+                return text
             } catch {
                 NSLog("whispr: Parakeet failed (\(error.localizedDescription)); falling back")
             }
         }
 
         do {
+            let text = try await apple.transcribe(audio)
             lastUsed = "Apple Speech"
-            return try await apple.transcribe(audio)
+            return text
         } catch {
             // Locale unsupported by SpeechAnalyzer (or transient failure) —
             // Whisper covers 99 languages.
             NSLog("whispr: SpeechAnalyzer failed (\(error.localizedDescription)); trying Whisper")
+            let text = try await whisper.transcribe(audio, language: language)
             lastUsed = "Whisper"
-            return try await whisper.transcribe(audio, language: language)
+            return text
         }
     }
 
